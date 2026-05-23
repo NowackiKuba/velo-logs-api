@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Serwer backendowy (Bun + Elysia)
+  api:
+    build:
+      context: .
+      target: base # Na devie używamy pierwszego etapu, żeby mieć devDependencies
+    command: bun --watch run src/index.ts # Flagą --watch odpalamy Hot Reloading
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app
+      - /app/node_modules # Chroni lokalne node_modules przed nadpisaniem przez kontener
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:secret_password@db:5432/velo_logs_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # Dev-only; use a unique secret per environment in production (min 32 chars).
+      - JWT_SECRET=dev-local-jwt-secret-min-32-chars-long
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - velo_logs_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # worker:
+  #   build:
+  #     context: .
+  #     target: base
+  #   command: bun --watch run src/worker.ts
+  #   volumes:
+  #     - .:/app
+  #     - /app/node_modules
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DATABASE_URL=postgres://postgres:secret_password@db:5432/velo_logs_db
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - WORKER_CONCURRENCY=10
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # Baza danych (PostgreSQL)
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret_password
+      POSTGRES_DB: velo_logs_db
+    ports:
+      - '5432:5432'
+    volumes:
+      # Named volume is project-specific so a reused Docker volume is not
+      # initialized with another app's POSTGRES_USER (env vars apply only once).
+      - velologsdb_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  velologsdb_pgdata:
+  velo_logs_redis_data:
