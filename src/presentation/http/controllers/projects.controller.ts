@@ -4,13 +4,17 @@ import { FindProjectByIdUseCase } from '@/application/projects/use-cases/find-pr
 import { ListProjectsByUserIdUseCase } from '@/application/projects/use-cases/list-projects-by-user-id.use-case';
 import { UpdateProjectUseCase } from '@/application/projects/use-cases/update-project.use-case';
 import { Project } from '@/domain/projects/entities/project';
+import { getCurrentUser } from '@/presentation/http/types/get-current-user';
+import type { AnyElysia } from 'elysia';
 import Elysia from 'elysia';
 import { CreateProjectBodySchema, ListProjectsQuerySchema, ProjectParamsSchema, UpdateProjectBodySchema } from '../schemas/project.schema';
 
 const toPublicProject = (project: Project) => ({
   id: project.id.value,
-  name: project.name,
+  name: project.name.value,
+  slug: project.slug.value,
   color: project.color.value,
+  description: project.description?.value,
   createdAt: project.createdAt,
   updatedAt: project.updatedAt,
 });
@@ -21,15 +25,20 @@ export const createProjectsController = (
   listProjectsByUserId: ListProjectsByUserIdUseCase,
   updateProject: UpdateProjectUseCase,
   deleteProject: DeleteProjectUseCase,
+  authMiddleware: AnyElysia,
 ) =>
   new Elysia({ prefix: '/projects' })
+    .use(authMiddleware)
     .post(
       '/',
-      async ({ body, currentUser, set }) => {
+      async ({ body, currentUser, userId, set }) => {
+        const user = getCurrentUser(currentUser, userId);
         const res = await createProject.execute({
           name: body.name,
+          slug: body.slug,
           color: body.color ?? '#ffffff',
-          userId: currentUser!.id.value,
+          description: body.description,
+          userId: user.id,
         });
 
         set.status = 201;
@@ -41,8 +50,9 @@ export const createProjectsController = (
     )
     .get(
       '/',
-      async ({ query, currentUser }) => {
-        const page = await listProjectsByUserId.execute(currentUser!.id.value, {
+      async ({ query, currentUser, userId }) => {
+        const user = getCurrentUser(currentUser, userId);
+        const page = await listProjectsByUserId.execute(user.id, {
           limit: query.limit,
           offset: query.offset,
           orderBy: query.orderBy,
@@ -69,7 +79,9 @@ export const createProjectsController = (
           await updateProject.execute({
             projectId: params.id,
             name: body.name,
+            slug: body.slug,
             color: body.color,
+            description: body.description,
           }),
         ),
       {

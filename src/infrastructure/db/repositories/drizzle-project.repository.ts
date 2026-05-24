@@ -3,8 +3,9 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../schema';
 import { Project } from '@/domain/projects/entities/project';
 import { ProjectId } from '@/domain/projects/value-objects/project/project-id.vo';
+import { ProjectSlug } from '@/domain/projects/value-objects/project/project-slug.vo';
 import { UserId } from '@/domain/users/value-objects/user-id.vo';
-import { and, asc, count, desc, eq, ilike, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, isNull, or } from 'drizzle-orm';
 import { paginate, Page } from '@/utils/pagination';
 
 type Database = PostgresJsDatabase<typeof schema>;
@@ -13,6 +14,7 @@ const PROJECT_ORDER_FIELDS = {
   createdAt: schema.projectsTable.createdAt,
   updatedAt: schema.projectsTable.updatedAt,
   name: schema.projectsTable.name,
+  slug: schema.projectsTable.slug,
 } as const;
 
 export class DrizzleProjectRepository implements ProjectRepositoryPort {
@@ -28,7 +30,9 @@ export class DrizzleProjectRepository implements ProjectRepositoryPort {
         target: schema.projectsTable.id,
         set: {
           name: row.name,
+          slug: row.slug,
           color: row.color,
+          description: row.description,
           updatedAt: row.updatedAt,
           deletedAt: row.deletedAt,
         },
@@ -37,6 +41,18 @@ export class DrizzleProjectRepository implements ProjectRepositoryPort {
 
   async findById(id: ProjectId): Promise<Project | null> {
     const rows = await this.db.select().from(schema.projectsTable).where(eq(schema.projectsTable.id, id.value));
+
+    const project = rows[0];
+
+    if (!project) {
+      return null;
+    }
+
+    return this.toDomain(project);
+  }
+
+  async findBySlug(slug: ProjectSlug): Promise<Project | null> {
+    const rows = await this.db.select().from(schema.projectsTable).where(eq(schema.projectsTable.slug, slug.value));
 
     const project = rows[0];
 
@@ -58,7 +74,12 @@ export class DrizzleProjectRepository implements ProjectRepositoryPort {
       eq(schema.projectMembersTable.userId, userId.value),
       isNull(schema.projectsTable.deletedAt),
       isNull(schema.projectMembersTable.deletedAt),
-      filters?.search ? ilike(schema.projectsTable.name, `%${filters.search}%`) : undefined,
+      filters?.search
+        ? or(
+            ilike(schema.projectsTable.name, `%${filters.search}%`),
+            ilike(schema.projectsTable.slug, `%${filters.search}%`),
+          )
+        : undefined,
     );
 
     const totalCountResult = await this.db
@@ -86,10 +107,12 @@ export class DrizzleProjectRepository implements ProjectRepositoryPort {
 
   private toDomain(entity: schema.DbProject): Project {
     return Project.reconstitute({
-      color: entity.color,
-      createdAt: entity.createdAt,
       id: entity.id,
       name: entity.name,
+      slug: entity.slug,
+      color: entity.color,
+      description: entity.description ?? undefined,
+      createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       deletedAt: entity.deletedAt ?? undefined,
     });
@@ -100,6 +123,7 @@ export class DrizzleProjectRepository implements ProjectRepositoryPort {
 
     return {
       ...data,
+      description: data.description ?? null,
       deletedAt: data.deletedAt ?? null,
     };
   }

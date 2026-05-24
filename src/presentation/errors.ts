@@ -1,10 +1,14 @@
+import { ApiKeyNotFoundError } from '@/application/api-keys/errors/api-key-not-found';
 import { InvalidCredentialsError } from '@/application/auth/errors/invalid-credentials.error';
+import { UnauthorizedContextError } from '@/application/auth/errors/unauthorized-context.error';
 import { InvalidProjectMemberStatusError, ProjectMemberAlreadyExistsError } from '@/application/project-members/errors/conflict.error';
 import { ProjectMemberNotFoundError } from '@/application/project-members/errors/not-found.error';
 import { ProjectNotFoundError } from '@/application/projects/errors/not-found.error';
+import { ProjectSlugAlreadyExistsError } from '@/application/projects/errors/conflict.error';
 import { UserAlreadyExistsError } from '@/application/user/errors/conflict.error';
 import { InvalidPasswordError } from '@/application/user/errors/invalid-password.error';
 import { UserNotFoundError } from '@/application/user/errors/not-found.error';
+import { ActiveProjectNotSetError } from '@/application/user/errors/active-project-not-set.error';
 import { BaseError } from 'base-error';
 import { Elysia } from 'elysia';
 
@@ -12,11 +16,15 @@ const ERROR_STATUS_MAP: Record<string, number> = {
   [UserNotFoundError.name]: 404,
   [ProjectNotFoundError.name]: 404,
   [ProjectMemberNotFoundError.name]: 404,
+  [ApiKeyNotFoundError.name]: 404,
   [UserAlreadyExistsError.name]: 409,
   [ProjectMemberAlreadyExistsError.name]: 409,
+  [ProjectSlugAlreadyExistsError.name]: 409,
   [InvalidProjectMemberStatusError.name]: 400,
   [InvalidPasswordError.name]: 401,
   [InvalidCredentialsError.name]: 401,
+  [UnauthorizedContextError.name]: 401,
+  [ActiveProjectNotSetError.name]: 400,
 };
 
 export const errorPlugin = new Elysia({ name: 'ErrorPlugin' }).onError(({ error, set }) => {

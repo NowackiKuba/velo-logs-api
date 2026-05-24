@@ -1,0 +1,2 @@
+ALTER TABLE "api_keys" ALTER COLUMN "id" SET DEFAULT 'b3ef6cd1-f4e9-4b0f-ac42-295970f467b2';--> statement-breakpoint
+ALTER TABLE "projects" ALTER COLUMN "id" SET DEFAULT 'b3bb17dd-3c34-4750-bf5d-42b2e6d36f66';

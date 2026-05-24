@@ -1,8 +1,8 @@
 import cookie from '@elysiajs/cookie';
 import { Elysia } from 'elysia';
+import '@/presentation/http/types/auth-context';
 import { printRoutes } from './presentation/http/plugins/print-routes';
-import { createAuthMiddleware } from './presentation/http/middleware/auth.middleware';
-import { authGuard } from './presentation/http/guards/auth.guard';
+import { createAuthStack } from './presentation/http/middleware/auth.middleware';
 import { errorPlugin } from './presentation/errors';
 import cors from '@elysia/cors';
 import { JwtTokenService } from './infrastructure/auth/jwt-token.service';
@@ -11,30 +11,71 @@ import { UserRepository } from './infrastructure/db/repositories/drizzle-user.re
 import { LoginUseCase } from './application/auth/use-cases/login.use-case';
 import { RegisterUseCase } from './application/auth/use-cases/register.use-case';
 import { FindUserByIdUseCase } from './application/user/use-cases/find-user-by-id.use-case';
+import { CreateApiKeyUseCase } from './application/api-keys/use-cases/create-api-key.use-case';
+import { ListProjectApiKeysUseCase } from './application/api-keys/use-cases/list-project-api-keys.use-case';
 import { db } from './infrastructure/db';
+import { AesSecretCipher } from './infrastructure/crypto/aes-secret-cipher';
+import { DrizzleApiKeyRepository } from './infrastructure/db/repositories/drizzle-api-key.repository';
+import { DrizzleProjectRepository } from './infrastructure/db/repositories/drizzle-project.repository';
+import { createApiKeysController } from './presentation/http/controllers/api-keys.controller';
+import { createUsersController } from './presentation/http/controllers/users.controller';
+import { createAuthController } from './presentation/http/controllers/auth.controller';
+import { CreateProjectUseCase } from './application/projects/use-cases/create-project.use-case';
+import { DrizzleProjectMemberRepository } from './infrastructure/db/repositories/drizzle-project-member.repository';
+import { UpdateProjectUseCase } from './application/projects/use-cases/update-project.use-case';
+import { DeleteProjectUseCase } from './application/projects/use-cases/delete-project.use-case';
+import { FindProjectByIdUseCase } from './application/projects/use-cases/find-project-by-id.use-case';
+import { ListProjectsByUserIdUseCase } from './application/projects/use-cases/list-projects-by-user-id.use-case';
+import { createProjectsController } from './presentation/http/controllers/projects.controller';
 
 const jwtSecret = process.env.JWT_SECRET ?? 'dev-local-jwt-secret-min-32-chars-long';
+const encryptionSecret = process.env.ENCRYPTION_SECRET ?? jwtSecret;
 
 const userRepo = new UserRepository(db);
-// const projectRepo = new DrizzleProjectRepository(db);
+const projectRepo = new DrizzleProjectRepository(db);
+const projectMemberRepo = new DrizzleProjectMemberRepository(db);
+const apiKeyRepo = new DrizzleApiKeyRepository(db);
 // const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 // const endpointRepo = new DrizzleEndpointRepository(db);
 // const webhookLogRepo = new DrizzleWebhookLogRepository(db);
 const passwordHasher = new BcryptPasswordHasher();
 const tokenService = new JwtTokenService(jwtSecret);
+const secretCipher = new AesSecretCipher(encryptionSecret);
 
 const loginUseCase = new LoginUseCase(userRepo, passwordHasher);
 const registerUseCase = new RegisterUseCase(userRepo, passwordHasher);
 const findUserByIdUseCase = new FindUserByIdUseCase(userRepo);
+const createApiKeyUseCase = new CreateApiKeyUseCase(apiKeyRepo, projectRepo, secretCipher);
+const listProjectApiKeysUseCase = new ListProjectApiKeysUseCase(apiKeyRepo, projectMemberRepo);
+
+const createProjectUseCase = new CreateProjectUseCase(projectRepo, projectMemberRepo, userRepo);
+const findProjectByIdUseCase = new FindProjectByIdUseCase(projectRepo);
+const listProjectsByUserIdUseCase = new ListProjectsByUserIdUseCase(projectRepo);
+const updateProjectUseCase = new UpdateProjectUseCase(projectRepo);
+const deleteProjectUseCase = new DeleteProjectUseCase(projectRepo);
+
+const { authMiddleware, authStack } = createAuthStack(findUserByIdUseCase, tokenService);
 
 // const webhookQueue = new BullMQWebhookQueue();
 
 const apiV1 = new Elysia({ prefix: '/api/v1', normalize: 'typebox' })
   .use(cookie())
   .use(printRoutes())
-  .use(createAuthMiddleware(findUserByIdUseCase, tokenService))
-  .use(authGuard)
+  .use(createAuthController(loginUseCase, registerUseCase, tokenService))
+  .use(authStack)
   .use(errorPlugin)
+  .use(createUsersController(authMiddleware))
+  .use(
+    createProjectsController(
+      createProjectUseCase,
+      findProjectByIdUseCase,
+      listProjectsByUserIdUseCase,
+      updateProjectUseCase,
+      deleteProjectUseCase,
+      authMiddleware,
+    ),
+  )
+  .use(createApiKeysController(createApiKeyUseCase, listProjectApiKeysUseCase, authMiddleware))
   .get('/', () => 'Hello Elysia', { isPublic: true });
 
 const app = new Elysia()

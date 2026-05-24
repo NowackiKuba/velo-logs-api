@@ -43,7 +43,7 @@ export class ProjectMember extends BaseAggregateRoot<ProjectMemberId> {
     this._projectId = ProjectId.create(props.projectId);
     this._userId = UserId.create(props.userId);
     this._permissions = ProjectMemberPermissions.create(props.permissions);
-    this._invitedById = UserId.create(props.invitedById);
+    this._invitedById = UserId.create(props.invitedById ?? props.userId);
     this._status = ProjectMemberStatus.create(props.status);
   }
 
@@ -56,13 +56,16 @@ export class ProjectMember extends BaseAggregateRoot<ProjectMemberId> {
     projectId: string;
     userId: string;
     permissions: string[];
-    invitedById: string;
+    invitedById?: string;
     status: ProjectMemberStatusType;
     createdAt: Date;
     updatedAt: Date;
     deletedAt?: Date;
   }) {
-    return new ProjectMember(props);
+    return new ProjectMember({
+      ...props,
+      invitedById: props.invitedById ?? props.userId,
+    });
   }
 
   update(props: Pick<ProjectMemberProps, 'permissions' | 'status'>) {

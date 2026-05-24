@@ -28,7 +28,10 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepositoryPo
       .onConflictDoUpdate({
         target: schema.projectMembersTable.id,
         set: {
+          userId: row.userId,
+          projectId: row.projectId,
           permissions: row.permissions,
+          invitedById: row.invitedById,
           status: row.status,
           updatedAt: row.updatedAt,
           deletedAt: row.deletedAt,
@@ -112,7 +115,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepositoryPo
       projectId: entity.projectId,
       userId: entity.userId,
       permissions: entity.permissions as string[],
-      invitedById: entity.invitedById,
+      invitedById: entity.invitedById ?? entity.userId,
       status: (entity.status ?? 'PENDING') as ProjectMemberStatusType,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
@@ -125,6 +128,7 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepositoryPo
 
     return {
       ...data,
+      invitedById: data.invitedById ?? data.userId,
       deletedAt: data.deletedAt ?? null,
     };
   }

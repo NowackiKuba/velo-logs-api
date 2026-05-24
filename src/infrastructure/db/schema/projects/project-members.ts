@@ -2,7 +2,7 @@ import { jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { usersTable } from '../users/users';
 import { projectsTable } from './projects';
 
-export const projectMembersTable = pgTable('projects', {
+export const projectMembersTable = pgTable('project_members', {
   id: uuid('id').primaryKey().notNull().default(crypto.randomUUID()),
   userId: uuid('user_id')
     .references(() => usersTable.id, { onDelete: 'cascade' })
@@ -11,6 +11,7 @@ export const projectMembersTable = pgTable('projects', {
     .references(() => projectsTable.id, { onDelete: 'cascade' })
     .notNull(),
   permissions: jsonb('permissions').notNull(),
+  invitedById: uuid('invited_by_id').references(() => usersTable.id, { onDelete: 'set null' }),
   status: varchar('status', { enum: ['PENDING', 'ACTIVE', 'TERMINATED'] }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

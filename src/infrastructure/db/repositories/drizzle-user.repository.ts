@@ -58,6 +58,7 @@ export class UserRepository implements UserRepositoryPort {
         target: usersTable.id,
         set: {
           id: row.id,
+          activeProjectId: row.activeProjectId,
           lastResetPasswordAt: row.lastResetPasswordAt,
           resetPasswordToken: row.resetPasswordToken,
           username: row.username,
@@ -75,6 +76,7 @@ export class UserRepository implements UserRepositoryPort {
   private toDomain(row: schema.DbUser): User {
     return User.reconstitute({
       id: row.id,
+      activeProjectId: row.activeProjectId ?? undefined,
       lastResetPasswordAt: row.lastResetPasswordAt ?? undefined,
       resetPasswordToken: row.resetPasswordToken ?? undefined,
       username: row.username,
@@ -89,6 +91,7 @@ export class UserRepository implements UserRepositoryPort {
   private toRow(props: UserJSON): schema.DbUser {
     return {
       id: props.id,
+      activeProjectId: props.activeProjectId ?? null,
       lastResetPasswordAt: props.lastResetPasswordAt ?? null,
       resetPasswordToken: props.resetPasswordToken ?? null,
       username: props.username,

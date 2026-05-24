@@ -1,8 +1,11 @@
 import { cookie } from '@elysiajs/cookie';
+import type { AnyElysia } from 'elysia';
 import { Elysia } from 'elysia';
 import type { TokenServicePort } from '@/application/auth/ports/token-service.port';
 import type { FindUserByIdUseCase } from '@/application/user/use-cases/find-user-by-id.use-case';
-import type { User } from '@/domain/users/entities/user';
+import type { AuthContext } from '@/presentation/http/types/current-user';
+import { toCurrentUser } from '@/presentation/http/types/to-current-user';
+import { createAuthGuard } from '@/presentation/http/guards/auth.guard';
 import { SESSION_COOKIE_NAME } from '@/presentation/http/constants/session';
 
 const readTokenFromAuthorizationHeader = (authorizationHeader: string | null): string | null => {
@@ -19,25 +22,23 @@ const readTokenFromAuthorizationHeader = (authorizationHeader: string | null): s
 
 /**
  * Resolves `currentUser` from the session cookie on every request.
- *
- * Elysia's `.derive()` runs before route handlers and merges values into
- * the request context. This plugin also `.use(cookie())` so cookie parsing
- * is available in the same scope as the derive (required when nesting plugins).
  */
 export const createAuthMiddleware = (findUserById: FindUserByIdUseCase, tokenService: TokenServicePort) =>
   new Elysia({ name: 'auth-context' })
     .use(cookie())
-    .derive({ as: 'global' }, async ({ cookie, request }): Promise<{ userId: string | null; currentUser: User | null }> => {
+    .derive({ as: 'global' }, async ({ cookie, request }): Promise<AuthContext> => {
       const sessionTokenRaw = cookie[SESSION_COOKIE_NAME]?.value;
       const sessionToken = typeof sessionTokenRaw === 'string' ? sessionTokenRaw : null;
       const headerToken = readTokenFromAuthorizationHeader(request.headers.get('authorization'));
       const token = headerToken ?? sessionToken;
 
-      if (!token) return { userId: null, currentUser: null };
+      if (!token) {
+        return { userId: null, currentUser: null };
+      }
 
       try {
         const payload = await tokenService.verify(token);
-        if (!payload) {
+        if (!payload?.userId) {
           return { userId: null, currentUser: null };
         }
 
@@ -47,19 +48,35 @@ export const createAuthMiddleware = (findUserById: FindUserByIdUseCase, tokenSer
           return { userId: null, currentUser: null };
         }
 
-        return { userId: payload.userId, currentUser: user };
+        const currentUser = toCurrentUser(user);
+
+        return {
+          userId: currentUser.id,
+          currentUser,
+        };
       } catch {
         return { userId: null, currentUser: null };
       }
     });
 
+export const createAuthStack = (findUserById: FindUserByIdUseCase, tokenService: TokenServicePort) => {
+  const authMiddleware = createAuthMiddleware(findUserById, tokenService);
+  const authGuard = createAuthGuard();
+
+  const authStack = new Elysia({ name: 'auth-stack' }).use(authMiddleware).use(authGuard);
+
+  return {
+    authMiddleware: authMiddleware as unknown as AnyElysia,
+    authGuard: authGuard as unknown as AnyElysia,
+    authStack: authStack as unknown as AnyElysia,
+  };
+};
+
 /**
- * @deprecated Prefer global `authGuard` with `isPublic: true` on public routes.
+ * @deprecated Prefer global `createAuthGuard()` with `isPublic: true` on public routes.
  */
-export const requireAuth = new Elysia({ name: 'require-auth' }).onBeforeHandle((context) => {
-  const user = (context as { currentUser?: User | null }).currentUser ?? null;
-  const { set } = context;
-  if (!user) {
+export const requireAuth = new Elysia({ name: 'require-auth' }).onBeforeHandle(({ currentUser, set }) => {
+  if (!currentUser?.id) {
     set.status = 401;
     return { message: 'Unauthorized' };
   }

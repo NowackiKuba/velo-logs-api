@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia';
-import { User } from '@/domain/users/entities/user';
+import type { CurrentUser } from '@/presentation/http/types/current-user';
+import { normalizeToCurrentUser } from '@/presentation/http/types/normalize-to-current-user';
 
 /**
  * Global auth guard — all routes require authentication unless marked `isPublic: true`.
@@ -9,22 +10,49 @@ import { User } from '@/domain/users/entities/user';
  * @example
  * .get('/health', () => ({ ok: true }), { isPublic: true })
  */
-export const authGuard = new Elysia({ name: 'auth-guard' })
-  .macro({
-    isPublic(enabled: boolean) {
-      if (!enabled) return;
+export const createAuthGuard = () =>
+  new Elysia({ name: 'auth-guard' })
+    .macro({
+      isPublic(enabled: boolean) {
+        if (!enabled) return;
+
+        return {
+          resolve: () => ({ skipAuth: true as const }),
+        };
+      },
+    })
+    .resolve({ as: 'global' }, (context) => {
+      const skipAuth = (context as { skipAuth?: boolean }).skipAuth;
+
+      if (skipAuth) {
+        return {
+          currentUser: null as CurrentUser | null,
+          userId: null as string | null,
+        };
+      }
+
+      const normalized = normalizeToCurrentUser(context.currentUser);
+
+      if (!normalized) {
+        return {
+          currentUser: null as CurrentUser | null,
+          userId: null as string | null,
+        };
+      }
 
       return {
-        resolve: () => ({ skipAuth: true as const }),
+        currentUser: normalized,
+        userId: normalized.id,
       };
-    },
-  })
-  .onBeforeHandle((context) => {
-    if ((context as { skipAuth?: boolean }).skipAuth) return;
+    })
+    .onBeforeHandle((context) => {
+      if ((context as { skipAuth?: boolean }).skipAuth) return;
 
-    const user = (context as { currentUser?: User | null }).currentUser ?? null;
-    if (!user) {
-      context.set.status = 401;
-      return { message: 'Unauthorized' };
-    }
-  });
+      if (!context.currentUser?.id) {
+        context.set.status = 401;
+        return { message: 'Unauthorized' };
+      }
+    });
+
+/** @deprecated Use `createAuthGuard()` */
+export const authGuard = createAuthGuard();
