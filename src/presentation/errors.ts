@@ -1,3 +1,4 @@
+import { ApiKeyExpiredError } from '@/application/api-keys/errors/api-key-expired';
 import { ApiKeyNotFoundError } from '@/application/api-keys/errors/api-key-not-found';
 import { InvalidCredentialsError } from '@/application/auth/errors/invalid-credentials.error';
 import { UnauthorizedContextError } from '@/application/auth/errors/unauthorized-context.error';
@@ -16,7 +17,8 @@ const ERROR_STATUS_MAP: Record<string, number> = {
   [UserNotFoundError.name]: 404,
   [ProjectNotFoundError.name]: 404,
   [ProjectMemberNotFoundError.name]: 404,
-  [ApiKeyNotFoundError.name]: 404,
+  [ApiKeyNotFoundError.name]: 401,
+  [ApiKeyExpiredError.name]: 401,
   [UserAlreadyExistsError.name]: 409,
   [ProjectMemberAlreadyExistsError.name]: 409,
   [ProjectSlugAlreadyExistsError.name]: 409,

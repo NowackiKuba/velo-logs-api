@@ -2,6 +2,8 @@ import cookie from '@elysiajs/cookie';
 import { Elysia } from 'elysia';
 import '@/presentation/http/types/auth-context';
 import { printRoutes } from './presentation/http/plugins/print-routes';
+import { AuthenticateApiKeyUseCase } from './application/api-keys/use-cases/authenticate-api-key.use-case';
+import { createApiKeyStack } from './presentation/http/middleware/api-key.middleware';
 import { createAuthStack } from './presentation/http/middleware/auth.middleware';
 import { errorPlugin } from './presentation/errors';
 import cors from '@elysia/cors';
@@ -11,6 +13,7 @@ import { UserRepository } from './infrastructure/db/repositories/drizzle-user.re
 import { LoginUseCase } from './application/auth/use-cases/login.use-case';
 import { RegisterUseCase } from './application/auth/use-cases/register.use-case';
 import { FindUserByIdUseCase } from './application/user/use-cases/find-user-by-id.use-case';
+import { SetActiveProjectUseCase } from './application/user/use-cases/set-active-project.use-case';
 import { CreateApiKeyUseCase } from './application/api-keys/use-cases/create-api-key.use-case';
 import { ListProjectApiKeysUseCase } from './application/api-keys/use-cases/list-project-api-keys.use-case';
 import { db } from './infrastructure/db';
@@ -27,6 +30,10 @@ import { DeleteProjectUseCase } from './application/projects/use-cases/delete-pr
 import { FindProjectByIdUseCase } from './application/projects/use-cases/find-project-by-id.use-case';
 import { ListProjectsByUserIdUseCase } from './application/projects/use-cases/list-projects-by-user-id.use-case';
 import { createProjectsController } from './presentation/http/controllers/projects.controller';
+import { createLogsController } from './presentation/http/controllers/logs.controller';
+import { CreateLogUseCase } from './application/logs/use-cases/create-log.use-case';
+import { ListLogsUseCase } from './application/logs/use-cases/list-logs.use-case';
+import { DrizzleLogRepository } from './infrastructure/db/repositories/drizzle-log.repository';
 
 const jwtSecret = process.env.JWT_SECRET ?? 'dev-local-jwt-secret-min-32-chars-long';
 const encryptionSecret = process.env.ENCRYPTION_SECRET ?? jwtSecret;
@@ -35,6 +42,7 @@ const userRepo = new UserRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 const apiKeyRepo = new DrizzleApiKeyRepository(db);
+const logRepo = new DrizzleLogRepository(db);
 // const projectMemberRepo = new DrizzleProjectMemberRepository(db);
 // const endpointRepo = new DrizzleEndpointRepository(db);
 // const webhookLogRepo = new DrizzleWebhookLogRepository(db);
@@ -45,8 +53,12 @@ const secretCipher = new AesSecretCipher(encryptionSecret);
 const loginUseCase = new LoginUseCase(userRepo, passwordHasher);
 const registerUseCase = new RegisterUseCase(userRepo, passwordHasher);
 const findUserByIdUseCase = new FindUserByIdUseCase(userRepo);
+const setActiveProjectUseCase = new SetActiveProjectUseCase(userRepo, projectMemberRepo);
 const createApiKeyUseCase = new CreateApiKeyUseCase(apiKeyRepo, projectRepo, secretCipher);
+const authenticateApiKeyUseCase = new AuthenticateApiKeyUseCase(apiKeyRepo, secretCipher);
 const listProjectApiKeysUseCase = new ListProjectApiKeysUseCase(apiKeyRepo, projectMemberRepo);
+const createLogUseCase = new CreateLogUseCase(logRepo);
+const listLogsUseCase = new ListLogsUseCase(logRepo, projectMemberRepo);
 
 const createProjectUseCase = new CreateProjectUseCase(projectRepo, projectMemberRepo, userRepo);
 const findProjectByIdUseCase = new FindProjectByIdUseCase(projectRepo);
@@ -55,6 +67,7 @@ const updateProjectUseCase = new UpdateProjectUseCase(projectRepo);
 const deleteProjectUseCase = new DeleteProjectUseCase(projectRepo);
 
 const { authMiddleware, authStack } = createAuthStack(findUserByIdUseCase, tokenService);
+const { apiKeyStack } = createApiKeyStack(authenticateApiKeyUseCase);
 
 // const webhookQueue = new BullMQWebhookQueue();
 
@@ -63,8 +76,9 @@ const apiV1 = new Elysia({ prefix: '/api/v1', normalize: 'typebox' })
   .use(printRoutes())
   .use(createAuthController(loginUseCase, registerUseCase, tokenService))
   .use(authStack)
+  .use(apiKeyStack)
   .use(errorPlugin)
-  .use(createUsersController(authMiddleware))
+  .use(createUsersController(authMiddleware, setActiveProjectUseCase))
   .use(
     createProjectsController(
       createProjectUseCase,
@@ -76,6 +90,7 @@ const apiV1 = new Elysia({ prefix: '/api/v1', normalize: 'typebox' })
     ),
   )
   .use(createApiKeysController(createApiKeyUseCase, listProjectApiKeysUseCase, authMiddleware))
+  .use(createLogsController(createLogUseCase, listLogsUseCase, authMiddleware))
   .get('/', () => 'Hello Elysia', { isPublic: true });
 
 const app = new Elysia()

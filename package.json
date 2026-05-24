@@ -4,6 +4,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts",
+    "mock-client": "bun run mock-client/index.ts",
+    "mock-client:bench": "AUTO_BENCHMARK=true bun run mock-client/index.ts",
     "docker:dev": "docker compose -f compose.dev.yml up --build",
     "docker:infra": "docker compose -f compose.dev.yml up db redis -d",
     "docker:redis": "docker compose -f compose.dev.yml up redis -d",

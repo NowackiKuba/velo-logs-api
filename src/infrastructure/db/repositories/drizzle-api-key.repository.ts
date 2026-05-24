@@ -4,7 +4,7 @@ import * as schema from '../schema';
 import { ApiKey } from '@/domain/api-keys/entities/api-key';
 import { ApiKeyId } from '@/domain/api-keys/value-objects/api-key-id.vo';
 import { DbApiKey } from '../schema/api-keys';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { ProjectId } from '@/domain/projects/value-objects/project/project-id.vo';
 type Database = PostgresJsDatabase<typeof schema>;
 
@@ -21,6 +21,15 @@ export class DrizzleApiKeyRepository implements ApiKeyRepositoryPort {
     }
 
     return this.toDomain(apiKey);
+  }
+
+  async findBySecretPrefix(secretPrefix: string): Promise<ApiKey[]> {
+    const rows = await this.db
+      .select()
+      .from(schema.apiKeysTable)
+      .where(and(eq(schema.apiKeysTable.secretPrefix, secretPrefix), isNull(schema.apiKeysTable.deletedAt)));
+
+    return rows.map((row) => this.toDomain(row));
   }
 
   async findByProjectId(projectId: ProjectId): Promise<ApiKey[]> {

@@ -5,5 +5,6 @@ import { ApiKeyId } from '../value-objects/api-key-id.vo';
 export interface ApiKeyRepositoryPort {
   save(apiKey: ApiKey): Promise<void>;
   findById(id: ApiKeyId): Promise<ApiKey | null>;
+  findBySecretPrefix(secretPrefix: string): Promise<ApiKey[]>;
   findByProjectId(projectId: ProjectId): Promise<ApiKey[]>;
 }

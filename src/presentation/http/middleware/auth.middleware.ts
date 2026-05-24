@@ -32,6 +32,10 @@ export const createAuthMiddleware = (findUserById: FindUserByIdUseCase, tokenSer
       const headerToken = readTokenFromAuthorizationHeader(request.headers.get('authorization'));
       const token = headerToken ?? sessionToken;
 
+      if (token?.startsWith('velo_')) {
+        return { userId: null, currentUser: null };
+      }
+
       if (!token) {
         return { userId: null, currentUser: null };
       }

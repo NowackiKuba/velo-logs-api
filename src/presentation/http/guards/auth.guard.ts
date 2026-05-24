@@ -31,6 +31,7 @@ export const createAuthGuard = () =>
         };
       }
 
+      // @ts-expect-error
       const normalized = normalizeToCurrentUser(context.currentUser);
 
       if (!normalized) {
